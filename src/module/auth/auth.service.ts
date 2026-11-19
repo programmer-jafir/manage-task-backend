@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { type JwtPayload } from "jsonwebtoken";
 import { pool } from "../../db";
 import type { IUser } from "./auth.interface";
 import bcrypt from "bcrypt";
@@ -71,7 +71,50 @@ const loginUserIntoDB = async (payload: {
   });
   return { user: user.rows[0], accessToken, refreshToken };
 };
+
+const refreshTokenIntoDB = async (token: string) => {
+    // 1. Verify the incoming refresh token
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(token, `${config.jwt_refresh_sec}`) as JwtPayload;
+  } catch (err) {
+    throw new Error("Invalid or expired refresh token!");
+  }
+
+  const user = await pool.query(
+    `
+    SELECT * FROM users WHERE email=$1
+    `,
+    [decoded.email],
+  );
+  if (user.rowCount === 0) {
+    throw new Error("Invlid credencial");
+  }
+
+
+  // console.log(user.rows[0].is_active)
+
+  if (!user.rows[0].is_active) {
+    throw new Error("Access Denied!");
+  }
+
+  const jwtPayload = {
+    id: user.rows[0].id,
+    name: user.rows[0].name,
+    email: user.rows[0].email,
+  };
+  const accessToken = jwt.sign(jwtPayload, `${config.jwt_sec}`, {
+    expiresIn: "7d",
+  });
+
+  const refreshToken = jwt.sign(jwtPayload, `${config.jwt_refresh_sec}`, {
+    expiresIn: "30d",
+  });
+  return { accessToken, refreshToken };
+};
+
 export const authService = {
   registerUserIntoDB,
   loginUserIntoDB,
+  refreshTokenIntoDB
 };
