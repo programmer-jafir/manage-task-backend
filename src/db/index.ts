@@ -25,6 +25,24 @@ export const initDB = async()=>{
                 ADD COLUMN IF NOT EXISTS gender VARCHAR(20),
                 ADD COLUMN IF NOT EXISTS avatar_url TEXT;
             `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS organizations (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL,
+                    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS organization_members (
+                    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    role VARCHAR(20) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (organization_id, user_id)
+                );
+            `);
             console.log("Database connected!!");
     }catch(error){
         console.error(error);
