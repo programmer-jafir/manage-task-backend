@@ -110,11 +110,45 @@ const refreshTokenIntoDB = async (token: string) => {
   const refreshToken = jwt.sign(jwtPayload, `${config.jwt_refresh_sec}`, {
     expiresIn: "30d",
   });
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, user: user.rows[0] };
+};
+
+
+// need to work
+const logoutUserIntoDB = async (token: string) => {
+  // 1. Verify refresh token
+  let decoded: JwtPayload;
+
+  try {
+    decoded = jwt.verify(
+      token,
+      config.jwt_refresh_sec
+    ) as JwtPayload;
+  } catch (error) {
+    throw new Error("Invalid or expired refresh token!");
+  }
+
+  // 2. Find the user
+  const user = await pool.query(
+    `SELECT id, is_active FROM users WHERE email = $1`,
+    [decoded.email]
+  );
+
+  if (user.rowCount === 0) {
+    throw new Error("User not found!");
+  }
+
+  // 3. Check user status
+  if (!user.rows[0].is_active) {
+    throw new Error("Access denied!");
+  }
+
+  return null;
 };
 
 export const authService = {
   registerUserIntoDB,
   loginUserIntoDB,
-  refreshTokenIntoDB
+  refreshTokenIntoDB,
+  logoutUserIntoDB
 };
