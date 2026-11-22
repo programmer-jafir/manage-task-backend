@@ -35,6 +35,10 @@ export const initDB = async()=>{
                 );
             `);
             await pool.query(`
+                ALTER TABLE organizations
+                ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+            `);
+            await pool.query(`
                 CREATE TABLE IF NOT EXISTS organization_members (
                     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

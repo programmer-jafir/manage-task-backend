@@ -4,6 +4,10 @@ import type {
   IOrganizationDetails,
   IOrganization,
   IOrganizationMembership,
+  IUpdatedOrganization,
+  IUpdateOrganization,
+  TDeleteOrganizationResult,
+  TUpdateOrganizationResult,
 } from "./organizations.interface";
 
 const getOrganizationForMemberFromDB = async (
@@ -25,7 +29,7 @@ const getOrganizationForMemberFromDB = async (
       AND current_member.user_id = $2
     LEFT JOIN organization_members members
       ON members.organization_id = o.id
-    WHERE o.id = $1
+    WHERE o.id = $1 AND o.deleted_at IS NULL
     GROUP BY o.id, o.name, o.description, o.owner_id, o.created_at
     `,
     [organizationId, userId],
@@ -42,7 +46,7 @@ const getUserOrganizationsFromDB = async (
     SELECT o.id, o.name, om.role
     FROM organization_members om
     JOIN organizations o ON o.id = om.organization_id
-    WHERE om.user_id = $1
+    WHERE om.user_id = $1 AND o.deleted_at IS NULL
     ORDER BY o.id
     `,
     [userId],
@@ -96,8 +100,100 @@ const createOrganizationInDB = async (
   }
 };
 
+const updateOrganizationInDB = async (
+  organizationId: number,
+  userId: number,
+  updates: IUpdateOrganization,
+): Promise<TUpdateOrganizationResult> => {
+  const result = await pool.query<IUpdatedOrganization>(
+    `
+    UPDATE organizations o
+    SET
+      name = COALESCE($2, o.name),
+      description = COALESCE($3, o.description)
+    WHERE o.id = $1
+      AND o.deleted_at IS NULL
+      AND (
+        o.owner_id = $4
+        OR EXISTS (
+          SELECT 1
+          FROM organization_members om
+          WHERE om.organization_id = o.id
+            AND om.user_id = $4
+            AND om.role IN ('owner', 'admin')
+        )
+      )
+    RETURNING o.id, o.name, o.description
+    `,
+    [organizationId, updates.name ?? null, updates.description ?? null, userId],
+  );
+  const organization = result.rows[0];
+  if (organization) {
+    return { status: "updated", organization };
+  }
+
+  const exists = await pool.query<{ exists: boolean }>(
+    "SELECT EXISTS(SELECT 1 FROM organizations WHERE id = $1 AND deleted_at IS NULL) AS exists",
+    [organizationId],
+  );
+  if (!exists.rows[0]?.exists) {
+    return { status: "not_found" };
+  }
+
+  return { status: "forbidden" };
+};
+
+const deleteOrganizationInDB = async (
+  organizationId: number,
+  userId: number,
+): Promise<TDeleteOrganizationResult> => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const organizationResult = await client.query<{ ownerId: number }>(
+      `
+      SELECT owner_id AS "ownerId"
+      FROM organizations
+      WHERE id = $1 AND deleted_at IS NULL
+      FOR UPDATE
+      `,
+      [organizationId],
+    );
+    const organization = organizationResult.rows[0];
+    if (!organization) {
+      await client.query("ROLLBACK");
+      return { status: "not_found" };
+    }
+
+    if (organization.ownerId !== userId) {
+      await client.query("ROLLBACK");
+      return { status: "forbidden" };
+    }
+
+    await client.query(
+      `
+      UPDATE organizations
+      SET deleted_at = NOW()
+      WHERE id = $1 AND deleted_at IS NULL
+      `,
+      [organizationId],
+    );
+    await client.query("COMMIT");
+    return { status: "deleted" };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 export const organizationsService = {
   getOrganizationForMemberFromDB,
   getUserOrganizationsFromDB,
   createOrganizationInDB,
+  updateOrganizationInDB,
+  deleteOrganizationInDB,
 };
