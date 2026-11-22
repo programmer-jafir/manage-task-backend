@@ -150,10 +150,47 @@ const logoutUser = async (req: Request, res: Response) => {
   }
 };
 
+const getCurrentUser = async (req: Request, res: Response) => {
+  try {
+    const id = req.user?.id;
+    if (typeof id !== "number") {
+      return sendResponse(res, {
+        statusCode: 401,
+        success: false,
+        message: "Invalid access token",
+      });
+    }
+
+    const user = await authService.getCurrentUserFromDB(id);
+    if (!user) {
+      return sendResponse(res, {
+        statusCode: 404,
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "User retrieved successfully",
+      data: user,
+    });
+  } catch (error: any) {
+    return sendResponse(res, {
+      statusCode: 500,
+      success: false,
+      message: error?.message || "Something went wrong",
+      error,
+    });
+  }
+};
+
 
 export const authController = {
   registerUser,
   loginUser,
   refreshToken,
-  logoutUser
+  logoutUser,
+  getCurrentUser,
 };

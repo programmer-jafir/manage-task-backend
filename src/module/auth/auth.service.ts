@@ -146,9 +146,23 @@ const logoutUserIntoDB = async (token: string) => {
   return null;
 };
 
+const getCurrentUserFromDB = async (id: number) => {
+  const result = await pool.query(
+    `
+    SELECT id, name, email FROM users
+    WHERE id = $1 AND is_active = true
+    `,
+    [id],
+  );
+
+  return result.rows[0] ?? null;
+};
+
+
 export const authService = {
   registerUserIntoDB,
   loginUserIntoDB,
   refreshTokenIntoDB,
-  logoutUserIntoDB
+  logoutUserIntoDB,
+  getCurrentUserFromDB,
 };
