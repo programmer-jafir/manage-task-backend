@@ -17,8 +17,17 @@ export const initDB = async()=>{
             updated_at TIMESTAMP DEFAULT NOW()
             );
             `);
+            await pool.query(`
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS bio TEXT,
+                ADD COLUMN IF NOT EXISTS address TEXT,
+                ADD COLUMN IF NOT EXISTS phone VARCHAR(30),
+                ADD COLUMN IF NOT EXISTS gender VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+            `);
             console.log("Database connected!!");
     }catch(error){
-        console.log(error)
+        console.error(error);
+        throw error;
     }
 }

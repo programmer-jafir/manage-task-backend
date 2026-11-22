@@ -3,9 +3,9 @@ import config from "./config";
 import { initDB } from "./db";
 
 const main =async()=>{
-    initDB()
-app.listen(config.port, ()=>{
-    console.log(`Server is running ${config.port}`)
-});
+    await initDB();
+    app.listen(config.port, ()=>{
+        console.log(`Server is running ${config.port}`)
+    });
 }
 main()
